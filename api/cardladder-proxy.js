@@ -1,31 +1,51 @@
-function GET_CARD_LADDER(certNumber) {
-  if (!certNumber) return 'Please provide cert number';
-  
+export default async function handler(req, res) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  const { certId } = req.query;
+
+  if (!certId) {
+    return res.status(400).json({ error: 'certId parameter is required' });
+  }
+
   try {
-    // Using corsproxy.io which sometimes bypasses Cloudflare better
-    var url = 'https://corsproxy.io/?' + 
-              encodeURIComponent('https://www.cardladder.com/api/psaCert/' + certNumber);
+    const apiUrl = `https://www.cardladder.com/api/psaCert/${certId}`;
     
-    var response = UrlFetchApp.fetch(url, {
-      muteHttpExceptions: true,
+    const response = await fetch(apiUrl, {
+      method: 'GET',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://www.cardladder.com/',
+        'Origin': 'https://www.cardladder.com'
       }
     });
+
+    const data = await response.json();
     
-    if (response.getResponseCode() === 200) {
-      var data = JSON.parse(response.getContentText());
-      
-      return [
-        ['Field', 'Value'],
-        ['Description', data.description || 'N/A'],
-        ['Estimated Value', data.estimatedValue ? '$' + data.estimatedValue.toLocaleString() : 'N/A'],
-        ['Last Sale Date', data.lastSaleDate ? new Date(data.lastSaleDate).toLocaleDateString() : 'N/A'],
-        ['Confidence', data.confidence + '/5']
-      ];
+    if (!response.ok) {
+      return res.status(response.status).json({ 
+        error: 'Card Ladder API returned an error',
+        status: response.status,
+        data: data
+      });
     }
-    return 'Not Found';
+
+    return res.status(200).json(data);
+    
   } catch (error) {
-    return 'Error: ' + error.toString();
+    console.error('Error:', error);
+    return res.status(500).json({ 
+      error: 'Failed to fetch from Card Ladder',
+      message: error.message 
+    });
   }
 }
