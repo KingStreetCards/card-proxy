@@ -1,34 +1,31 @@
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  const { certId } = req.query;
-
-  if (!certId) {
-    return res.status(400).json({ error: 'certId is required' });
-  }
-
+function GET_CARD_LADDER(certNumber) {
+  if (!certNumber) return 'Please provide cert number';
+  
   try {
-    const response = await fetch(
-      `https://www.cardladder.com/api/psaCert/${certId}`
-    );
-
-    if (!response.ok) {
-      return res.status(response.status).json({ 
-        error: 'Card Ladder API error',
-        status: response.status 
-      });
-    }
-
-    const data = await response.json();
-    return res.status(200).json(data);
+    // Using corsproxy.io which sometimes bypasses Cloudflare better
+    var url = 'https://corsproxy.io/?' + 
+              encodeURIComponent('https://www.cardladder.com/api/psaCert/' + certNumber);
     
+    var response = UrlFetchApp.fetch(url, {
+      muteHttpExceptions: true,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    if (response.getResponseCode() === 200) {
+      var data = JSON.parse(response.getContentText());
+      
+      return [
+        ['Field', 'Value'],
+        ['Description', data.description || 'N/A'],
+        ['Estimated Value', data.estimatedValue ? '$' + data.estimatedValue.toLocaleString() : 'N/A'],
+        ['Last Sale Date', data.lastSaleDate ? new Date(data.lastSaleDate).toLocaleDateString() : 'N/A'],
+        ['Confidence', data.confidence + '/5']
+      ];
+    }
+    return 'Not Found';
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return 'Error: ' + error.toString();
   }
 }
